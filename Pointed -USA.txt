@@ -1,0 +1,70 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon, box
+import geopandas as gpd
+
+# Function to create hexagonal grid cells with point-sided orientation
+def create_hex_grid(bounds, hex_size):
+    """
+    Create a tightly packed hexagonal grid with point-sided orientation, ensuring even rows start with a full-size hexagon.
+    
+    :param bounds: (min_lon, min_lat, max_lon, max_lat) - Bounding box of the area
+    :param hex_size: Size of each hexagon (radius in degrees)
+    :return: A list of Shapely polygons representing the hexagonal grid cells
+    """
+    min_lon, min_lat, max_lon, max_lat = bounds
+    hexagons = []
+    
+    # Calculate the distances for a tightly packed grid
+    dx = np.sqrt(3) * hex_size  # Horizontal distance between hexagon centers
+    dy = 1.5 * hex_size  # Vertical distance between hexagon centers
+
+    # Generate hexagons row by row
+    y = min_lat
+    row = 0  # Track row number for staggering
+    while y <= max_lat + hex_size:  # Extend slightly beyond bounds to cover edges
+        x = min_lon
+        # Apply offset only for odd rows (1, 3, 5,...)
+        if row % 2 == 1:  # Odd rows: Offset by half the height of a hexagon
+            x += dx / 2  # Offset by half the width of a hexagon
+        while x <= max_lon + hex_size:
+            # Create a hexagon centered at (x, y)
+            hexagon = create_hexagon(x, y, hex_size)
+            if hexagon.intersects(box(min_lon, min_lat, max_lon, max_lat)):
+                hexagons.append(hexagon)
+            x += dx
+        y += dy
+        row += 1
+    
+    return hexagons
+
+# Function to create a single point-sided hexagon centered at (x, y)
+def create_hexagon(x, y, hex_size):
+    """
+    Create a point-sided hexagon centered at (x, y) with equal side lengths.
+    """
+    angle = np.linspace(np.pi / 6, 2 * np.pi + np.pi / 6, 7)  # Rotate by 30 degrees
+    coords = [(x + hex_size * np.cos(a), y + hex_size * np.sin(a)) for a in angle]
+    return Polygon(coords)
+
+# Define USA Bounding Box (latitude, longitude)
+bounds = (-125.0, 24.396308, -66.93457, 49.384358)
+
+# Hexagon radius (distance from center to a vertex)
+hex_size = 1
+
+# Create the hexagonal grid
+hex_grid = create_hex_grid(bounds, hex_size)
+
+# Convert the grid to a GeoDataFrame for plotting
+gdf = gpd.GeoDataFrame(geometry=hex_grid, crs="EPSG:4326")
+
+# Plot the hexagonal grid over the USA
+ax = gdf.plot(figsize=(10, 15), edgecolor='black', alpha=0.5)
+ax.set_title("Point-Sided Hexagonal Grid of USA (Even Rows Start Full Size)")
+ax.set_xlim([-125, -66])
+ax.set_ylim([24, 49])
+plt.show()
+
+# Optionally: Save the grid to a shapefile or GeoJSON
+#gdf.to_file("usa_hex_grid.geojson", driver='GeoJSON')
