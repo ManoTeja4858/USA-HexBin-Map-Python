@@ -1,0 +1,70 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon, box
+import geopandas as gpd
+
+# Function to create hexagonal grid cells with column-based adjustments
+def create_hex_grid(bounds, hex_size):
+    """
+    Create a tightly packed hexagonal grid with alternating half-offset columns.
+    
+    :param bounds: (min_lon, min_lat, max_lon, max_lat) - Bounding box of the area
+    :param hex_size: Size of each hexagon (radius in degrees)
+    :return: A list of Shapely polygons representing the hexagonal grid cells
+    """
+    min_lon, min_lat, max_lon, max_lat = bounds
+    hexagons = []
+    
+    # Calculate the distances for a tightly packed grid
+    dx = 1.5 * hex_size  # Horizontal distance between hexagon centers
+    dy = np.sqrt(3) * hex_size  # Vertical distance between hexagon centers
+
+    # Generate hexagons column by column
+    x = min_lon
+    column = 0  # Track column number for staggering
+    while x <= max_lon + hex_size:  # Extend slightly beyond bounds to cover edges
+        y = min_lat
+        if column % 2 == 1:  # Odd columns
+            y += dy / 2  # Offset by half the height of a hexagon
+        while y <= max_lat + hex_size:
+            # Create a hexagon centered at (x, y)
+            hexagon = create_hexagon(x, y, hex_size)
+            if hexagon.intersects(box(min_lon, min_lat, max_lon, max_lat)):
+                hexagons.append(hexagon)
+            y += dy
+        x += dx
+        column += 1
+    
+    return hexagons
+
+# Function to create a single hexagon centered at (x, y)
+def create_hexagon(x, y, hex_size):
+    """
+    Create a hexagon centered at (x, y).
+    """
+    angle = np.linspace(0, 2 * np.pi, 7)
+    coords = [(x + hex_size * np.cos(a), y + hex_size * np.sin(a)) for a in angle]
+    return Polygon(coords)
+
+# Define USA Bounding Box (latitude, longitude)
+bounds = (-125.0, 24.396308, -66.93457, 49.384358)
+
+# Hexagon radius (distance from center to a vertex)
+hex_size = 1
+
+# Create the hexagonal grid
+hex_grid = create_hex_grid(bounds, hex_size)
+
+# Convert the grid to a GeoDataFrame for plotting
+gdf = gpd.GeoDataFrame(geometry=hex_grid, crs="EPSG:4326")
+
+# Plot the hexagonal grid over the USA
+ax = gdf.plot(figsize=(10, 15), edgecolor='black', alpha=0.5)
+ax.set_title("Tightly Packed Hexagonal Grid of USA (Column Adjustment)")
+ax.set_xlim([-125, -66])
+ax.set_ylim([24, 49])
+plt.show()
+
+# Optionally: Save the grid to a shapefile or GeoJSON
+# gdf.to_file("usa_hex_grid.shp")
+# gdf.to_file("usa_hex_grid.geojson", driver='GeoJSON')
